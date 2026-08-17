@@ -3,7 +3,7 @@ name: Build OpenSquilla APK
 "on":
   workflow_dispatch:
   push:
-    branches: [main]
+    tags: [v*]
 
 jobs:
   build:
@@ -23,8 +23,14 @@ jobs:
           yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true
       - name: Build with Gradle
         run: chmod +x gradlew && ./gradlew :app:assembleDebug
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opensquilla-apk
           path: app/build/outputs/apk/debug/*.apk
+      - name: Upload to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${GITHUB_REF#refs/tags/} app/build/outputs/apk/debug/*.apk --clobber

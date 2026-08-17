@@ -23,14 +23,29 @@ jobs:
           yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" >/dev/null 2>&1 || true
       - name: Build with Gradle
         run: chmod +x gradlew && ./gradlew :app:assembleDebug
+      - name: Upload APK to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          TAG=${GITHUB_REF#refs/tags/}
+          # Create release if not exists
+          RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+          if [ -z "$RELEASE_ID" ]; then
+            RELEASE_ID=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/releases" \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"OpenSquilla $TAG\"}" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null)
+          fi
+          echo "Release ID: $RELEASE_ID"
+          curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=opensquilla-android.apk" \
+            --data-binary @$APK
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: opensquilla-apk
           path: app/build/outputs/apk/debug/*.apk
-      - name: Upload to Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${GITHUB_REF#refs/tags/} app/build/outputs/apk/debug/*.apk --clobber

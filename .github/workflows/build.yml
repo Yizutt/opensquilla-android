@@ -5,6 +5,8 @@ name: Build OpenSquilla APK
   push:
     tags: [v*]
 
+permissions: write-all
+
 jobs:
   build:
     runs-on: ubuntu-latest
